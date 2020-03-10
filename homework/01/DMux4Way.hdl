@@ -17,4 +17,7 @@ CHIP DMux4Way {
 
     PARTS:
     // Put your code here:
+    DMux(in=in, sel=sel[1], a=inSelA, b=inSelB);
+    DMux(in=inSelA, sel=sel[0], a=a, b=b);
+    DMux(in=inSelB, sel=sel[0], a=c, b=d);
 }
