@@ -7,3 +7,38 @@
 // (R0, R1, R2 refer to RAM[0], RAM[1], and RAM[2], respectively.)
 
 // Put your code here.
+//i=0
+@i
+M=0
+//RAM[2]=0
+@2
+M=0
+
+
+(LOOP)
+//if i<RAM[1], go to END
+@i
+D=M
+@1
+D=M-D
+@END
+D;JLE
+
+//RAM[2]=RAM[2]+RAM[0]
+@0
+D=M
+@2
+M=M+D
+
+//i++
+@i
+M=M+1
+
+//return to loop
+@LOOP
+0;JMP
+
+//end
+(END)
+@END
+0;JMP
