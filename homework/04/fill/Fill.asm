@@ -12,3 +12,52 @@
 // the screen should remain fully clear as long as no key is pressed.
 
 // Put your code here.
+(LOOP)
+@i
+M=0
+//flag=0, white, -1, black
+@flag
+M=0
+//addr=screen
+@SCREEN
+D=A
+@addr
+M=D
+
+//listen to keyboard
+@KBD
+D=M
+@BLACK
+D;JNE
+//set flag to white
+@flag
+M=0
+@FILL
+0;JMP
+//black flag
+(BLACK)
+@flag
+M=-1
+
+//fill screen
+(FILL)
+@flag
+D=M
+@addr
+A=M
+M=D
+//addr++
+@addr
+M=M+1
+@8192
+D=A
+//i++
+@i
+M=M+1
+D=D-M
+//finish screen buffer
+@LOOP
+D;JLE
+@FILL
+0;JMP
+
