@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -15,34 +16,102 @@ import (
 
 const (
 	varBase = 16
+
+	AIns = "0"
+	CIns = "1"
+	FS   = ","
 )
 
-var symbolTable = map[string]int{
-	//build in symbol
-	"R0":     0,
-	"R1":     1,
-	"R2":     2,
-	"R3":     3,
-	"R4":     4,
-	"R5":     5,
-	"R6":     6,
-	"R7":     7,
-	"R8":     8,
-	"R9":     9,
-	"R10":    10,
-	"R11":    11,
-	"R12":    12,
-	"R13":    13,
-	"R14":    14,
-	"R15":    15,
-	"SP":     0,
-	"LCL":    1,
-	"ARG":    2,
-	"THIS":   3,
-	"THAT":   4,
-	"SCREEN": 16384,
-	"KBD":    24576,
-}
+var (
+	symbolTable = map[string]int{
+		//build in symbol
+		"R0":     0,
+		"R1":     1,
+		"R2":     2,
+		"R3":     3,
+		"R4":     4,
+		"R5":     5,
+		"R6":     6,
+		"R7":     7,
+		"R8":     8,
+		"R9":     9,
+		"R10":    10,
+		"R11":    11,
+		"R12":    12,
+		"R13":    13,
+		"R14":    14,
+		"R15":    15,
+		"SP":     0,
+		"LCL":    1,
+		"ARG":    2,
+		"THIS":   3,
+		"THAT":   4,
+		"SCREEN": 16384,
+		"KBD":    24576,
+	}
+
+	cmpTable = map[string]string{
+		"0":   "0101010",
+		"1":   "0111111",
+		"-1":  "0111010",
+		"D":   "0001100",
+		"A":   "0110000",
+		"M":   "1110000",
+		"!D":  "0001101",
+		"!A":  "0110001",
+		"!M":  "1110001",
+		"-D":  "0001111",
+		"-A":  "0110011",
+		"-M":  "1110011",
+		"D+1": "0011111",
+		"1+D": "0011111",
+		"A+1": "0110111",
+		"1+A": "0110111",
+		"M+1": "1110111",
+		"1+M": "1110111",
+		"D-1": "0001110",
+		"A-1": "0110010",
+		"M-1": "1110010",
+		"D+A": "0000010",
+		"A+D": "0000010",
+		"D+M": "1000010",
+		"M+D": "1000010",
+		"D-A": "0010011",
+		"D-M": "1010011",
+		"A-D": "0000111",
+		"M-D": "1000111",
+		"D&A": "0000000",
+		"A&D": "0000000",
+		"D&M": "1000000",
+		"M&D": "1000000",
+		"D|A": "0010101",
+		"A|D": "0010101",
+		"D|M": "1010101",
+		"M|D": "1010101",
+	}
+
+	desTable = map[string]string{
+		"null": "000",
+		"M":    "001",
+		"D":    "010",
+		"MD":   "011",
+		"A":    "100",
+		"AM":   "101",
+		"AD":   "110",
+		"AMD":  "111",
+	}
+
+	jmpTable = map[string]string{
+		"null": "000",
+		"JGT":  "001",
+		"JEQ":  "010",
+		"JGE":  "011",
+		"JLT":  "100",
+		"JNE":  "101",
+		"JLE":  "110",
+		"JMP":  "111",
+	}
+)
 
 type Compiler struct {
 	filename string
@@ -90,21 +159,6 @@ func (c *Compiler) newFile(suffix string) *os.File {
 	}
 
 	return f
-}
-func (c *Compiler) Write() {
-	//write to another file
-	file := c.newFile("hack")
-	defer file.Close()
-	fWriter := bufio.NewWriter(file)
-
-	for _, line := range c.stream {
-		line = line + "\n"
-		if _, err := fWriter.WriteString(line); err != nil {
-			log.Fatalln("Compiler failed to write file:", err)
-			break
-		}
-	}
-	fWriter.Flush()
 }
 
 //PreCompile remove the empty lines and comments, generating .pre file
@@ -165,7 +219,7 @@ func (c *Compiler) GenSymbolTable() {
 	for _, line := range c.stream {
 		if strings.HasPrefix(line, "(") && strings.HasSuffix(line, ")") {
 			line = strings.TrimSpace(line[1 : len(line)-1])
-			symbolTable[line] = lineIndex + 1
+			symbolTable[line] = lineIndex
 			continue
 		}
 		lineIndex++
@@ -272,7 +326,29 @@ func (c *Compiler) ParseSyntax() {
 
 	//line loop
 	for _, line := range c.stream {
-		line := strings.TrimSpace(line)
+		if strings.HasPrefix(line, "@") {
+			//output the parsed A instruction as 0, data
+			line = AIns + FS + line[1:]
+			newStream = append(newStream, line)
+			continue
+		}
+
+		//output the parsed C instruction as 1, des, comp, jmp
+		var des, comp, jmp string
+		//get des fields
+		ret := strings.Split(line, "=")
+
+		if len(ret) > 1 {
+			des = ret[0]
+			ret = ret[1:]
+		}
+		ret = strings.Split(ret[0], ";")
+		comp = ret[0]
+		if len(ret) > 1 {
+			jmp = ret[1]
+		}
+
+		line = CIns + FS + des + FS + comp + FS + jmp
 		newStream = append(newStream, line)
 	}
 
@@ -299,7 +375,55 @@ func (c *Compiler) Assemble() {
 
 	//line loop
 	for _, line := range c.stream {
-		line := strings.TrimSpace(line)
+		a := strings.Split(line, FS)
+		//hadle A instruction
+		if a[0] == AIns {
+			v, err := strconv.ParseInt(a[1], 10, 32)
+			if err != nil {
+				log.Fatalln("Unrecognized integer value in A instruction:", a[1], a)
+			}
+			line = fmt.Sprintf("%s%015b", AIns, v)
+		} else {
+			//handle C Instruction
+			des := a[1]
+			cmp := a[2]
+			jmp := a[3]
+
+			line = CIns + "11"
+
+			//transalte cmp
+			if cmp == "" {
+				log.Fatalln("Des field is empty")
+			}
+			v, ok := cmpTable[cmp]
+			if !ok {
+				log.Fatalln("Unrecognized cmp symbol:", cmp)
+			}
+			line += v
+
+			//translate des
+			if des == "" {
+				des = "null"
+			}
+
+			v, ok = desTable[des]
+			if !ok {
+				log.Fatalln("Unrecognized des symbol:", des)
+			}
+
+			line += v
+
+			//translate jmp
+			if jmp == "" {
+				jmp = "null"
+			}
+			v, ok = jmpTable[jmp]
+			if !ok {
+				log.Fatalln("Unrecognized jmp symbol:", jmp)
+			}
+			line += v
+		}
+
 		newStream = append(newStream, line)
 	}
 
